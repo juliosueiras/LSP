@@ -3,19 +3,20 @@ from .protocol import Request
 from .transports import start_tcp_transport
 from .rpc import Client, attach_stdio_client
 from .process import start_server
-from .url import filename_to_uri
 from .logging import debug
 import os
 from .protocol import completion_item_kinds, symbol_kinds
 try:
-    from typing import Callable, Dict, Any, Optional
-    assert Callable and Dict and Any and Optional
+    from .workspace import Workspace
+    from typing import Callable, Dict, Any, Optional, Iterable, List
+    assert Callable and Dict and Any and Optional and Iterable and List
+    assert Workspace
 except ImportError:
     pass
 
 
 def create_session(config: ClientConfig,
-                   project_path: str,
+                   workspaces: 'Optional[Iterable[Workspace]]',
                    env: dict,
                    settings: Settings,
                    on_pre_initialize: 'Optional[Callable[[Session], None]]' = None,
@@ -26,7 +27,7 @@ def create_session(config: ClientConfig,
     def with_client(client) -> 'Session':
         return Session(
             config=config,
-            project_path=project_path,
+            workspaces=workspaces,
             client=client,
             on_pre_initialize=on_pre_initialize,
             on_post_initialize=on_post_initialize,
@@ -34,7 +35,7 @@ def create_session(config: ClientConfig,
 
     session = None
     if config.binary_args:
-        process = start_server(config.binary_args, project_path, env, settings.log_stderr)
+        process = start_server(config.binary_args, env, settings.log_stderr)
         if process:
             if config.tcp_port:
                 transport = start_tcp_transport(config.tcp_port, config.tcp_host)
@@ -59,11 +60,18 @@ def create_session(config: ClientConfig,
     return session
 
 
-def get_initialize_params(project_path: str, config: ClientConfig):
+def get_initialize_params(workspaces: 'Optional[Iterable[Workspace]]', config: ClientConfig):
+    root_uri = None
+    lsp_workspaces = None
+    if workspaces is not None:
+        root_uri = next(iter(workspaces)).uri
+        lsp_workspaces = [workspace.to_dict() for workspace in workspaces]
     initializeParams = {
         "processId": os.getpid(),
-        "rootUri": filename_to_uri(project_path),
-        "rootPath": project_path,
+        # REMARK: A language server should forget about the rootUri and migrate to using workspaces instead:
+        # https://github.com/Microsoft/vscode/wiki/Adopting-Multi-Root-Workspace-APIs#language-client--language-server
+        "rootUri": root_uri,
+        "workspaceFolders": lsp_workspaces,
         "capabilities": {
             "textDocument": {
                 "synchronization": {
@@ -118,7 +126,8 @@ def get_initialize_params(project_path: str, config: ClientConfig):
                     "symbolKind": {
                         "valueSet": symbol_kinds
                     }
-                }
+                },
+                "workspaceFolders": True
             }
         }
     }
@@ -131,13 +140,12 @@ def get_initialize_params(project_path: str, config: ClientConfig):
 class Session(object):
     def __init__(self,
                  config: ClientConfig,
-                 project_path: str,
+                 workspaces: 'Optional[Iterable[Workspace]]',
                  client: Client,
                  on_pre_initialize: 'Optional[Callable[[Session], None]]' = None,
                  on_post_initialize: 'Optional[Callable[[Session], None]]' = None,
                  on_post_exit: 'Optional[Callable[[str], None]]' = None) -> None:
         self.config = config
-        self.project_path = project_path
         self.state = ClientStates.STARTING
         self._on_post_initialize = on_post_initialize
         self._on_post_exit = on_post_exit
@@ -145,7 +153,7 @@ class Session(object):
         self.client = client
         if on_pre_initialize:
             on_pre_initialize(self)
-        self.initialize()
+        self.__initialize(workspaces)
 
     def has_capability(self, capability):
         return capability in self.capabilities and self.capabilities[capability] is not False
@@ -153,11 +161,10 @@ class Session(object):
     def get_capability(self, capability):
         return self.capabilities.get(capability)
 
-    def initialize(self):
-        params = get_initialize_params(self.project_path, self.config)
-        self.client.send_request(
-            Request.initialize(params),
-            lambda result: self._handle_initialize_result(result))
+    def __initialize(self, workspaces: 'Optional[Iterable[Workspace]]') -> None:
+        params = get_initialize_params(workspaces, self.config)
+        debug("sending initialize params:", params)
+        self.client.send_request(Request.initialize(params), self._handle_initialize_result)
 
     def _handle_initialize_result(self, result):
         self.state = ClientStates.READY

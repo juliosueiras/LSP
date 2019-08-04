@@ -13,13 +13,15 @@ from .core.events import global_events
 from .core.workspace import enable_in_project, disable_in_project
 
 try:
+    from .core.types import ViewLike
     from typing import List, Optional, Dict, Any
     assert List and Optional and Dict and Any
+    assert ViewLike
 except ImportError:
     pass
 
 
-def detect_supportable_view(view: sublime.View):
+def detect_supportable_view(view: 'ViewLike'):
     config = config_for_scope(view)
     if not config:
         available_config = get_global_client_config(view, client_configs.all)
@@ -35,7 +37,7 @@ def extract_syntax_name(syntax_file: str) -> str:
     return syntax_file.split('/')[-1].split('.')[0]
 
 
-def show_enable_config(view: sublime.View, config: ClientConfig):
+def show_enable_config(view: 'ViewLike', config: ClientConfig):
     syntax = str(view.settings().get("syntax", ""))
     message = "LSP has found a language server for {}. Run \"Setup Language Server\" to start using it".format(
         extract_syntax_name(syntax)

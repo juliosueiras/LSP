@@ -19,7 +19,7 @@ except ImportError:
     pass
 
 
-def get_scope_client_config(view: 'sublime.View', configs: 'List[ClientConfig]',
+def get_scope_client_config(view: 'ViewLike', configs: 'List[ClientConfig]',
                             point: 'Optional[int]' = None) -> 'Optional[ClientConfig]':
     # When there are multiple server configurations, all of which are for
     # similar scopes (e.g. 'source.json', 'source.json.sublime.settings') the
@@ -50,15 +50,15 @@ def get_scope_client_config(view: 'sublime.View', configs: 'List[ClientConfig]',
     return scope_client_config
 
 
-def get_global_client_config(view: 'sublime.View', global_configs: 'List[ClientConfig]') -> 'Optional[ClientConfig]':
+def get_global_client_config(view: 'ViewLike', global_configs: 'List[ClientConfig]') -> 'Optional[ClientConfig]':
     return get_scope_client_config(view, global_configs)
 
 
-def create_window_configs(window: 'sublime.Window', global_configs: 'List[ClientConfig]') -> 'List[ClientConfig]':
+def create_window_configs(window: 'WindowLike', global_configs: 'List[ClientConfig]') -> 'List[ClientConfig]':
     return list(map(lambda c: apply_window_settings(c, window), global_configs))
 
 
-def apply_window_settings(client_config: 'ClientConfig', window: 'sublime.Window') -> 'ClientConfig':
+def apply_window_settings(client_config: 'ClientConfig', window: 'WindowLike') -> 'ClientConfig':
     window_config = get_project_config(window)
 
     if client_config.name in window_config:

@@ -1,40 +1,113 @@
 import os
+from .logging import debug
+from .url import filename_to_uri, uri_to_filename
+
+
 try:
-    from typing import List, Optional, Any
-    assert List and Optional and Any
+    from .types import ViewLike, WindowLike
+    from typing import List, Optional, Any, Dict, Iterable
+    assert List and Optional and Any and ViewLike and WindowLike and Dict and Iterable
 except ImportError:
     pass
 
-from .logging import debug
-# from .types import WindowLike
 
-
-def get_project_path(window: 'Any') -> 'Optional[str]':
-    """
-    Returns the first project folder or the parent folder of the active view
-    """
-    if len(window.folders()):
-        folder_paths = window.folders()
-        return folder_paths[0]
+def ensure_absolute_path(project_base_path: str, folder: str) -> str:
+    if os.path.isabs(folder):
+        return folder
     else:
-        view = window.active_view()
-        if view:
-            filename = view.file_name()
-            if filename and os.path.exists(filename):  # https://github.com/tomv564/LSP/issues/644
-                project_path = os.path.dirname(filename)
-                debug("Couldn't determine project directory since no folders are open!",
-                      "Using", project_path, "as a fallback.")
-                return project_path
-            else:
-                debug("Couldn't determine project directory since no folders are open",
-                      "and the current file isn't saved on the disk.")
-                return None
-        else:
-            debug("No view is active in current window")
-            return None  # https://github.com/tomv564/LSP/issues/219
+        return os.path.abspath(os.path.join(project_base_path, folder))
 
 
-def get_common_parent(paths: 'List[str]') -> str:
+def absolute_project_base_path(window: 'WindowLike') -> str:
+    project_file_name = window.project_file_name()
+    if not project_file_name:
+        return ""
+    return os.path.dirname(os.path.abspath(project_file_name))
+
+
+class Workspace:
+
+    __slots__ = ('name', 'uri')
+
+    def __init__(self, name: str, uri: str) -> None:
+        self.name = name
+        self.uri = uri
+
+    @classmethod
+    def from_sublime_project_data(cls, project_base_path: str, folder: 'Dict[str, Any]') -> 'Workspace':
+        name = folder.get("name")  # type: Optional[str]
+        path = folder.get("path")  # type: Optional[str]
+        if not path:
+            raise KeyError('"path" should be present in Sublime Text folder project data')
+        path = ensure_absolute_path(project_base_path, path)
+        if not os.path.isdir(path):
+            raise ValueError("{} is not a directory".format(path))
+        if not name:
+            name = os.path.basename(path)
+        return cls(name, filename_to_uri(path))
+
+    def __repr__(self) -> str:
+        return "{}('{}', '{}')".format(self.__class__.__name__, self.name, self.uri)
+
+    def __str__(self) -> str:
+        return self.uri
+
+    def __eq__(self, other: 'Any') -> bool:
+        if isinstance(other, Workspace):
+            return self.name == other.name and self.uri == other.uri
+        return False
+
+    def to_dict(self) -> 'Dict[str, str]':
+        return {"name": self.name, "uri": self.uri}
+
+
+def get_project_data_or_throw(window: 'WindowLike') -> 'Dict[str, Any]':
+    data = window.project_data()
+    if data is None:
+        raise AttributeError("window {} has no project data".format(window.id()))
+    return data
+
+
+def get_first_workspace_from_window(window: 'WindowLike') -> 'Workspace':
+    data = get_project_data_or_throw(window)
+    folder = data["folders"][0]
+    path = folder.get("path")  # type: str
+    if not os.path.isdir(path):
+        raise ValueError("{} is not a directory".format(path))
+    return Workspace(name=os.path.basename(path), uri=filename_to_uri(path))
+
+
+def get_workspaces_from_project_data(window: 'WindowLike') -> 'Optional[List[Workspace]]':
+    data = get_project_data_or_throw(window)
+    project_base_path = absolute_project_base_path(window)
+    folders = data.get("folders")
+    if folders is None:
+        raise ValueError("window folders is None")
+    return [Workspace.from_sublime_project_data(project_base_path, folder) for folder in folders]
+
+
+def get_workspaces_from_window(window: 'WindowLike') -> 'Optional[List[Workspace]]':
+    project_file_name = window.project_file_name()
+    if project_file_name:
+        return get_workspaces_from_project_data(window)
+    try:
+        return [get_first_workspace_from_window(window)]
+    except AttributeError as error:
+        debug(error)
+    return None
+
+
+def get_common_prefix_of_workspaces(workspaces: 'Optional[List[Workspace]]') -> 'Optional[str]':
+    if workspaces is None:
+        return None
+    return get_common_parent(uri_to_filename(workspace.uri) for workspace in workspaces)
+
+
+def get_common_prefix_of_workspaces_for_window(window: 'WindowLike') -> 'Optional[str]':
+    return get_common_prefix_of_workspaces(get_workspaces_from_window(window))
+
+
+def get_common_parent(paths: 'Iterable[str]') -> str:
     """
     Get the common parent directory of multiple paths.
 
@@ -44,16 +117,7 @@ def get_common_parent(paths: 'List[str]') -> str:
     return os.path.commonprefix([path + '/' for path in paths]).rstrip('/')
 
 
-def is_in_workspace(window: 'Any', file_path: str) -> bool:
-    workspace_path = get_project_path(window)
-    if workspace_path is None:
-        return False
-
-    common_dir = get_common_parent([workspace_path, file_path])
-    return workspace_path == common_dir
-
-
-def enable_in_project(window, config_name: str) -> None:
+def enable_in_project(window: 'WindowLike', config_name: str) -> None:
     project_data = window.project_data()
     if isinstance(project_data, dict):
         project_settings = project_data.setdefault('settings', dict())
@@ -65,7 +129,7 @@ def enable_in_project(window, config_name: str) -> None:
         debug('non-dict returned in project_settings: ', project_data)
 
 
-def disable_in_project(window, config_name: str) -> None:
+def disable_in_project(window: 'WindowLike', config_name: str) -> None:
     project_data = window.project_data()
     if isinstance(project_data, dict):
         project_settings = project_data.setdefault('settings', dict())
@@ -77,7 +141,7 @@ def disable_in_project(window, config_name: str) -> None:
         debug('non-dict returned in project_settings: ', project_data)
 
 
-def get_project_config(window: 'Any') -> dict:
+def get_project_config(window: 'WindowLike') -> dict:
     project_data = window.project_data() or dict()
     if isinstance(project_data, dict):
         project_settings = project_data.setdefault('settings', dict())

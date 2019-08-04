@@ -1,20 +1,22 @@
-from .windows import WindowManager, WindowRegistry, ViewLike
+from .windows import WindowManager, WindowRegistry
 from .diagnostics import WindowDiagnostics
 from .sessions import create_session, Session
 from .test_session import MockClient, test_config, test_language
 from .test_rpc import MockSettings
 from .events import global_events
-from .types import ClientConfig, LanguageConfig
+from .types import ClientConfig, LanguageConfig, WindowLike, ViewLike
 from . import test_sublime as test_sublime
-# from .logging import set_debug_logging, debug
+from .workspace import Workspace
+from .url import filename_to_uri
 import os
 import tempfile
 import unittest
 
 try:
-    from typing import Callable, List, Optional, Set, Dict, Any, Tuple
-    assert Callable and List and Optional and Set and Session and Dict and Any and Tuple
+    from typing import Callable, List, Optional, Set, Dict, Any, Tuple, Iterable
+    assert Callable and List and Optional and Set and Session and Dict and Any and Tuple and Iterable
     assert ClientConfig and LanguageConfig
+    assert Workspace
 except ImportError:
     pass
 
@@ -30,13 +32,19 @@ class MockSublimeSettings(object):
         self._values[key] = value
 
 
-class MockView(object):
+class MockView(ViewLike):
     def __init__(self, file_name):
         self._file_name = file_name
         self._window = None
         self._settings = MockSublimeSettings({"syntax": "Plain Text"})
         self._status = dict()  # type: Dict[str, str]
         self._text = "asdf"
+
+    def id(self) -> int:
+        return 0
+
+    def assign_syntax(self, syntax: str) -> None:
+        pass
 
     def file_name(self):
         return self._file_name
@@ -81,11 +89,11 @@ class MockHandlerDispatcher(object):
         self._initialized.add(config_name)
 
 
-class MockWindow(object):
-    def __init__(self, files_in_groups: 'List[List[ViewLike]]' = []) -> None:
+class MockWindow(WindowLike):
+    def __init__(self, files_in_groups: 'List[List[ViewLike]]' = [], project_file_name: 'Optional[str]' = None) -> None:
         self._files_in_groups = files_in_groups
+        self._project_file_name = project_file_name
         self._is_valid = True
-        self._folders = [os.path.dirname(__file__)]
         self._default_view = MockView(None)
         self._project_data = None  # type: Optional[Dict[str, Any]]
         self.commands = []  # type: List[Tuple[str, Dict[str, Any]]]
@@ -94,16 +102,26 @@ class MockWindow(object):
         return 0
 
     def folders(self):
-        return self._folders
+        if not self._project_data:
+            return []
+        folders = []
+        for folder in self._project_data.get("folders", []):
+            folders.append(folder["path"])
+        return folders
 
     def set_folders(self, folders):
-        self._folders = folders
+        if self._project_data is None:
+            self._project_data = {}
+        self._project_data["folders"] = [{"path": folder} for folder in folders]
 
     def num_groups(self):
         return len(self._files_in_groups)
 
     def active_group(self):
         return 0
+
+    def project_file_name(self) -> Optional[str]:
+        return self._project_file_name
 
     def project_data(self) -> Optional[dict]:
         return self._project_data
@@ -149,8 +167,11 @@ class MockWindow(object):
                     views.append(view)
         return views
 
-    def run_command(self, command_name: str, command_args: 'Dict[str, Any]') -> None:
-        self.commands.append((command_name, command_args))
+    def run_command(self, command_name: str, command_args: 'Optional[Dict[str, Any]]') -> None:
+        if command_args is None:
+            self.commands.append((command_name, {}))
+        else:
+            self.commands.append((command_name, command_args))
 
 
 class TestGlobalConfigs(object):
@@ -220,15 +241,17 @@ class TestDocumentHandlerFactory(object):
         return MockDocuments()
 
 
-def mock_start_session(window: MockWindow,
-                       project_path: str,
-                       config: ClientConfig,
-                       on_pre_initialize: 'Callable[[Session], None]',
-                       on_post_initialize: 'Callable[[Session], None]',
-                       on_post_exit: 'Callable[[str], None]') -> 'Optional[Session]':
+def mock_start_window_config(
+    __,
+    workspaces: 'Optional[Iterable[Workspace]]',
+    _: 'ClientConfig',
+    on_pre_initialize: 'Callable[[Session], None]',
+    on_post_initialize: 'Callable[[Session], None]',
+    on_post_exit: 'Callable[[str], None]'
+) -> 'Optional[Session]':
     return create_session(
         config=test_config,
-        project_path=project_path,
+        workspaces=workspaces,
         env=dict(),
         settings=MockSettings(),
         bootstrap_client=MockClient(),
@@ -239,10 +262,16 @@ def mock_start_session(window: MockWindow,
 
 class WindowRegistryTests(unittest.TestCase):
 
+    def make_window_registry(self) -> 'WindowRegistry':
+        return WindowRegistry(
+            TestGlobalConfigs(),
+            TestDocumentHandlerFactory(),
+            mock_start_window_config,
+            test_sublime,
+            MockHandlerDispatcher())
+
     def test_can_get_window_state(self):
-        windows = WindowRegistry(TestGlobalConfigs(), TestDocumentHandlerFactory(),
-                                 mock_start_session,
-                                 test_sublime, MockHandlerDispatcher())
+        windows = self.make_window_registry()
         test_window = MockWindow()
         wm = windows.lookup(test_window)
         self.assertIsNotNone(wm)
@@ -250,9 +279,8 @@ class WindowRegistryTests(unittest.TestCase):
     def test_removes_window_state(self):
         global_events.reset()
         test_window = MockWindow([[MockView(__file__)]])
-        windows = WindowRegistry(TestGlobalConfigs(), TestDocumentHandlerFactory(),
-                                 mock_start_session,
-                                 test_sublime, MockHandlerDispatcher())
+        windows = self.make_window_registry()
+        # import pdb; pdb.set_trace()
         wm = windows.lookup(test_window)
         wm.start_active_views()
 
@@ -268,10 +296,20 @@ class WindowRegistryTests(unittest.TestCase):
 
 class WindowManagerTests(unittest.TestCase):
 
-    def test_can_start_active_views(self):
+    def make_window_manager(self, window: 'WindowLike') -> 'Tuple[WindowManager, MockDocuments]':
         docs = MockDocuments()
-        wm = WindowManager(MockWindow([[MockView(__file__)]]), MockConfigs(), docs,
-                           WindowDiagnostics(), mock_start_session, test_sublime, MockHandlerDispatcher())
+        window_manager = WindowManager(
+            window,
+            MockConfigs(),
+            docs,
+            WindowDiagnostics(),
+            mock_start_window_config,
+            test_sublime,
+            MockHandlerDispatcher())
+        return window_manager, docs
+
+    def test_can_start_active_views(self):
+        wm, docs = self.make_window_manager(MockWindow([[MockView(__file__)]]))
         wm.start_active_views()
 
         # session must be started (todo: verify session is ready)
@@ -279,10 +317,8 @@ class WindowManagerTests(unittest.TestCase):
         self.assertListEqual(docs._documents, [__file__])
 
     def test_can_open_supported_view(self):
-        docs = MockDocuments()
         window = MockWindow([[]])
-        wm = WindowManager(window, MockConfigs(), docs, WindowDiagnostics(), mock_start_session, test_sublime,
-                           MockHandlerDispatcher())
+        wm, docs = self.make_window_manager(window)
 
         wm.start_active_views()
         self.assertIsNone(wm.get_session(test_config.name))
@@ -296,9 +332,7 @@ class WindowManagerTests(unittest.TestCase):
         self.assertEqual(len(docs._sessions), 1)
 
     def test_can_restart_sessions(self):
-        docs = MockDocuments()
-        wm = WindowManager(MockWindow([[MockView(__file__)]]), MockConfigs(), docs,
-                           WindowDiagnostics(), mock_start_session, test_sublime, MockHandlerDispatcher())
+        wm, docs = self.make_window_manager(MockWindow([[MockView(__file__)]]))
         wm.start_active_views()
 
         # session must be started (todo: verify session is ready)
@@ -319,8 +353,7 @@ class WindowManagerTests(unittest.TestCase):
         global_events.reset()
         docs = MockDocuments()
         test_window = MockWindow([[MockView(__file__)]])
-        wm = WindowManager(test_window, MockConfigs(), docs,
-                           WindowDiagnostics(), mock_start_session, test_sublime, MockHandlerDispatcher())
+        wm, docs = self.make_window_manager(test_window)
         wm.start_active_views()
 
         # session must be started (todo: verify session is ready)
@@ -338,10 +371,8 @@ class WindowManagerTests(unittest.TestCase):
 
     def test_ends_sessions_when_quick_switching(self):
         global_events.reset()
-        docs = MockDocuments()
         test_window = MockWindow([[MockView(__file__)]])
-        wm = WindowManager(test_window, MockConfigs(), docs,
-                           WindowDiagnostics(), mock_start_session, test_sublime, MockHandlerDispatcher())
+        wm, docs = self.make_window_manager(test_window)
         wm.start_active_views()
 
         # session must be started (todo: verify session is ready)
@@ -350,7 +381,7 @@ class WindowManagerTests(unittest.TestCase):
         # our starting document must be loaded
         self.assertListEqual(docs._documents, [__file__])
 
-        # change project_path
+        # change workspaces
         new_project_path = tempfile.gettempdir()
         test_window.set_folders([new_project_path])
         # global_events.publish("view.on_close", MockView(__file__))
@@ -362,13 +393,12 @@ class WindowManagerTests(unittest.TestCase):
         self.assertEqual(len(docs._sessions), 0)
 
         # don't forget to check or we'll keep restarting sessions!
-        self.assertEqual(wm._project_path, new_project_path)
+        self.assertIsNotNone(wm._workspaces)
+        self.assertEqual(len(wm._workspaces), 1)
+        self.assertEqual(wm._workspaces[0].uri, filename_to_uri(new_project_path))
 
     def test_offers_restart_on_crash(self):
-        docs = MockDocuments()
-        wm = WindowManager(MockWindow([[MockView(__file__)]]), MockConfigs(), docs,
-                           WindowDiagnostics(), mock_start_session, test_sublime,
-                           MockHandlerDispatcher())
+        wm, docs = self.make_window_manager(MockWindow([[MockView(__file__)]]))
         wm.start_active_views()
 
         # session must be started (todo: verify session is ready)
@@ -389,7 +419,7 @@ class WindowManagerTests(unittest.TestCase):
         docs = MockDocuments()
         dispatcher = MockHandlerDispatcher()
         wm = WindowManager(MockWindow([[MockView(__file__)]]), MockConfigs(), docs,
-                           WindowDiagnostics(), mock_start_session, test_sublime,
+                           WindowDiagnostics(), mock_start_window_config, test_sublime,
                            dispatcher)
         wm.start_active_views()
 

@@ -8,16 +8,18 @@ from .core.protocol import Request, Point
 from .core.registry import client_for_view, LspTextCommand
 from .core.settings import PLUGIN_NAME, settings
 from .core.url import uri_to_filename
-from .core.workspace import get_project_path
+from .core.workspace import get_common_prefix_of_workspaces_for_window
 
 try:
+    from .core.types import WindowLike, ViewLike
     from typing import List, Dict, Optional
     assert List and Dict and Optional
+    assert WindowLike and ViewLike
 except ImportError:
     pass
 
 
-def ensure_references_panel(window: sublime.Window) -> 'Optional[sublime.View]':
+def ensure_references_panel(window: 'WindowLike') -> 'Optional[ViewLike]':
     return ensure_panel(window, "references", r"^\s*\S\s+(\S.*):$", r"^\s+([0-9]+):?([0-9]+).*$",
                         "Packages/" + PLUGIN_NAME + "/Syntaxes/References.sublime-syntax")
 
@@ -61,7 +63,7 @@ class LspSymbolReferencesCommand(LspTextCommand):
         word_region = self.view.word(pos)
         word = self.view.substr(word_region)
 
-        base_dir = get_project_path(window)
+        base_dir = get_common_prefix_of_workspaces_for_window(window)
         formatted_references = self._get_formatted_references(response, base_dir)
 
         if settings.show_references_in_quick_panel:

@@ -1,7 +1,9 @@
 
 try:
+    from .types import ViewLike
     from typing import Any, List, Dict, Tuple, Callable, Optional, Set
     assert Any and List and Dict and Tuple and Callable and Optional and Set
+    assert ViewLike
 except ImportError:
     pass
 
@@ -46,7 +48,7 @@ def start_active_window():
         windows.lookup(window).start_active_views()
 
 
-def on_view_activated(view: sublime.View):
+def on_view_activated(view: 'ViewLike'):
     window = view.window()
     if window:
         windows.lookup(window).activate_view(view)

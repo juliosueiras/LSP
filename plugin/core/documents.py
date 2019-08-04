@@ -58,6 +58,10 @@ def is_transient_view(view: sublime.View) -> bool:
         return True
 
 
+def is_suitable(view: sublime.View) -> bool:
+    return bool(view.file_name()) and not is_transient_view(view)
+
+
 class DocumentSyncListener(sublime_plugin.ViewEventListener):
     def __init__(self, view: 'sublime.View') -> None:
         self.view = view
@@ -74,21 +78,19 @@ class DocumentSyncListener(sublime_plugin.ViewEventListener):
         return False
 
     def on_load_async(self):
-        # skip transient views:
-        if not is_transient_view(self.view):
+        if is_suitable(self.view):
             global_events.publish("view.on_load_async", self.view)
 
     def on_activated_async(self):
-        if self.view.file_name() and not is_transient_view(self.view):
+        if is_suitable(self.view):
             global_events.publish("view.on_activated_async", self.view)
 
     def on_modified(self):
-        if self.view.file_name():
-            global_events.publish("view.on_modified", self.view)
+        global_events.publish("view.on_modified", self.view)
 
     def on_post_save_async(self):
         global_events.publish("view.on_post_save_async", self.view)
 
     def on_close(self):
-        if self.view.file_name() and self.view.is_primary():
+        if self.view.is_primary():
             global_events.publish("view.on_close", self.view)

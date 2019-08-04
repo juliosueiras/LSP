@@ -4,8 +4,10 @@ import sublime
 import sublime_plugin
 
 try:
+    from .core.types import WindowLike, ViewLike
     from typing import Any, List, Dict, Tuple, Callable, Optional
     assert Any and List and Dict and Tuple and Callable and Optional
+    assert WindowLike and ViewLike
 except ImportError:
     pass
 
@@ -19,7 +21,7 @@ from .core.panels import ensure_panel
 from .core.protocol import Diagnostic, DiagnosticSeverity
 from .core.settings import settings, PLUGIN_NAME, client_configs
 from .core.views import range_to_region
-from .core.workspace import get_project_path
+from .core.workspace import get_common_prefix_of_workspaces_for_window
 from .core.registry import windows
 
 
@@ -296,19 +298,19 @@ class LspClearDiagnosticsCommand(sublime_plugin.WindowCommand):
         windows.lookup(self.window)._diagnostics.clear()
 
 
-def ensure_diagnostics_panel(window: sublime.Window) -> 'Optional[sublime.View]':
+def ensure_diagnostics_panel(window: 'WindowLike') -> 'Optional[ViewLike]':
     return ensure_panel(window, "diagnostics", r"^\s*\S\s+(\S.*):$", r"^\s+([0-9]+):?([0-9]+).*$",
                         "Packages/" + PLUGIN_NAME + "/Syntaxes/Diagnostics.sublime-syntax")
 
 
-def update_diagnostics_panel(window: sublime.Window):
+def update_diagnostics_panel(window: 'WindowLike'):
     assert window, "missing window!"
 
     if not window.is_valid():
         debug('ignoring update to closed window')
         return
 
-    base_dir = get_project_path(window)
+    base_dir = get_common_prefix_of_workspaces_for_window(window)
 
     diagnostics_by_file = get_window_diagnostics(window)
     if diagnostics_by_file is not None:

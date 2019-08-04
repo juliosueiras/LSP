@@ -1,7 +1,8 @@
 from .logging import debug, exception_log, server_log
-import subprocess
 import os
 import shutil
+import subprocess
+import tempfile
 import threading
 
 try:
@@ -32,13 +33,16 @@ def add_extension_if_missing(server_binary_args: 'List[str]') -> 'List[str]':
     return server_binary_args
 
 
-def start_server(server_binary_args: 'List[str]', working_dir: str,
-                 env: 'Dict[str,str]', attach_stderr: bool) -> 'Optional[subprocess.Popen]':
-    si = None
+def start_server(
+    server_binary_args: 'List[str]',
+    env: 'Dict[str,str]',
+    attach_stderr: bool
+) -> 'Optional[subprocess.Popen]':
+    startupinfo = None
     if os.name == "nt":
         server_binary_args = add_extension_if_missing(server_binary_args)
-        si = subprocess.STARTUPINFO()  # type: ignore
-        si.dwFlags |= subprocess.SW_HIDE | subprocess.STARTF_USESHOWWINDOW  # type: ignore
+        startupinfo = subprocess.STARTUPINFO()  # type: ignore
+        startupinfo.dwFlags |= subprocess.SW_HIDE | subprocess.STARTF_USESHOWWINDOW  # type: ignore
 
     debug("starting " + str(server_binary_args))
 
@@ -49,9 +53,9 @@ def start_server(server_binary_args: 'List[str]', working_dir: str,
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=stderr_destination,
-        cwd=working_dir,
+        cwd=tempfile.gettempdir(),
         env=env,
-        startupinfo=si)
+        startupinfo=startupinfo)
 
 
 def attach_logger(process: 'subprocess.Popen', stream) -> None:

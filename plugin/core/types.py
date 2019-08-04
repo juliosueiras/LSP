@@ -1,8 +1,8 @@
 import re
 try:
     from typing_extensions import Protocol
-    from typing import Optional, List, Callable, Dict, Any
-    assert Optional and List and Callable and Dict and Any
+    from typing import Optional, List, Callable, Dict, Any, Tuple, Iterable
+    assert Optional and List and Callable and Dict and Any and Tuple and Iterable
 except ImportError:
     pass
     Protocol = object  # type: ignore
@@ -80,8 +80,9 @@ class ClientConfig(object):
 
 
 class ViewLike(Protocol):
-    def __init__(self) -> None:
-        pass
+
+    def id(self) -> int:
+        ...
 
     def file_name(self) -> 'Optional[str]':
         ...
@@ -110,12 +111,45 @@ class ViewLike(Protocol):
     def score_selector(self, region, scope: str) -> int:
         ...
 
+    def assign_syntax(self, syntax: str) -> None:
+        ...
+
+    def set_read_only(self, val: bool) -> None:
+        ...
+
+    def run_command(self, command_name: str, command_args: 'Optional[Dict[str, Any]]' = None) -> None:
+        ...
+
+    def find_all(self, selector: str) -> 'Iterable[Tuple[int, int]]':
+        ...
+
+    def add_regions(self, key: str, regions: 'Iterable[Any]', scope: str = "", icon: str = "", flags: int = 0) -> None:
+        ...
+
 
 class WindowLike(Protocol):
     def id(self) -> int:
         ...
 
-    def folders(self) -> 'List[str]':
+    def is_valid(self):
+        ...
+
+    def hwnd(self):
+        ...
+
+    def active_view(self) -> 'Optional[ViewLike]':
+        ...
+
+    def run_command(self, cmd: str, args: 'Optional[Dict[str, Any]]') -> None:
+        ...
+
+    def new_file(self, flags: int, syntax: str) -> ViewLike:
+        ...
+
+    def open_file(self, fname: str, flags: int, group: int) -> ViewLike:
+        ...
+
+    def find_open_file(self, fname: str) -> 'Optional[ViewLike]':
         ...
 
     def num_groups(self) -> int:
@@ -124,20 +158,102 @@ class WindowLike(Protocol):
     def active_group(self) -> int:
         ...
 
+    def focus_group(self, idx: int) -> None:
+        ...
+
     def active_view_in_group(self, group: int) -> ViewLike:
         ...
 
-    def project_data(self) -> 'Optional[dict]':
+    def layout(self):
         ...
 
-    def active_view(self) -> 'Optional[ViewLike]':
+    def get_layout(self):
         ...
 
-    def status_message(self, msg: str) -> None:
+    def set_layout(self, layout):
+        ...
+
+    def create_output_panel(self, name: str, unlisted: bool = False) -> ViewLike:
+        ...
+
+    def find_output_panel(self, name: str) -> 'Optional[ViewLike]':
+        ...
+
+    def destroy_output_panel(self, name: str) -> None:
+        ...
+
+    def active_panel(self) -> 'Optional[str]':
+        ...
+
+    def panels(self) -> 'List[str]':
         ...
 
     def views(self) -> 'List[ViewLike]':
         ...
 
-    def run_command(self, command_name: str, command_args: 'Dict[str, Any]') -> None:
+    def get_output_panel(self, name: str):
+        ...
+
+    def show_input_panel(self, caption: str, initial_text: str, on_done, on_change, on_cancel) -> ViewLike:
+        ...
+
+    def show_quick_panel(self, items: 'List[Any]', on_select, flags: int,
+                         selected_index: int, on_highlight: 'Optional[Any]') -> None:
+        ...
+
+    def is_sidebar_visible(self) -> bool:
+        ...
+
+    def set_sidebar_visible(self, flag: bool) -> None:
+        ...
+
+    def is_minimap_visible(self) -> bool:
+        ...
+
+    def set_minimap_visible(self, flag: bool) -> None:
+        ...
+
+    def is_status_bar_visible(self) -> bool:
+        ...
+
+    def set_status_bar_visible(self, flag: bool) -> None:
+        ...
+
+    def get_tabs_visible(self) -> bool:
+        ...
+
+    def set_tabs_visible(self, flag: bool) -> None:
+        ...
+
+    def is_menu_visible(self) -> bool:
+        ...
+
+    def set_menu_visible(self, flag: bool) -> None:
+        ...
+
+    def folders(self) -> 'List[str]':
+        ...
+
+    def project_file_name(self) -> 'Optional[str]':
+        ...
+
+    def project_data(self) -> 'Optional[dict]':
+        ...
+
+    def set_project_data(self, v: dict) -> None:
+        ...
+
+    def template_settings(self):
+        ...
+
+    def lookup_symbol_in_index(self, sym: str) -> 'List[str]':
+        ...
+
+    def lookup_symbol_in_open_files(self, sym: str) -> 'List[str]':
+        ...
+
+    def extract_variables(self) -> dict:
+        ...
+
+    def status_message(self, msg: str) -> None:
         ...

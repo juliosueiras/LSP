@@ -518,11 +518,10 @@ class WindowManager(object):
         self._window.status_message("{} initialized".format(session.config.name))
 
     def _handle_workspace_folders_request(self, params: 'Dict[str, Any]', client: 'Client', request_id: int) -> None:
-        workspaces = get_workspaces_from_window(self._window)
-        if workspaces is None:
+        if self._workspaces is None:
             lsp_workspaces = None
         else:
-            lsp_workspaces = [workspace.to_dict() for workspace in workspaces]
+            lsp_workspaces = [workspace.to_dict() for workspace in self._workspaces]
         client.send_response(Response(request_id, lsp_workspaces))
 
     def _handle_view_closed(self, view, session):

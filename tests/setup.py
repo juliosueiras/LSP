@@ -20,8 +20,6 @@ test_file_path = dirname(__file__) + "/testfile.txt"
 
 SUPPORTED_SCOPE = "text.plain"
 SUPPORTED_SYNTAX = "Packages/Text/Plain text.tmLanguage"
-NOTIFICATIONS = {}  # type: Dict[str, List[Dict[str, Any]]]
-REQUESTS = {}  # type: Dict[str, List[Dict,str Any]]
 text_language = LanguageConfig("text", [SUPPORTED_SCOPE], [SUPPORTED_SYNTAX])
 text_config = ClientConfig("textls", [], None, languages=[text_language])
 

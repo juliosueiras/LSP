@@ -153,7 +153,7 @@ class Session(object):
         self.client = client
         if on_pre_initialize:
             on_pre_initialize(self)
-        self.__initialize(workspaces)
+        self.initialize(workspaces)
 
     def has_capability(self, capability):
         return capability in self.capabilities and self.capabilities[capability] is not False
@@ -161,9 +161,8 @@ class Session(object):
     def get_capability(self, capability):
         return self.capabilities.get(capability)
 
-    def __initialize(self, workspaces: 'Optional[Iterable[Workspace]]') -> None:
+    def initialize(self, workspaces: 'Optional[Iterable[Workspace]]') -> None:
         params = get_initialize_params(workspaces, self.config)
-        debug("sending initialize params:", params)
         self.client.send_request(Request.initialize(params), self._handle_initialize_result)
 
     def _handle_initialize_result(self, result):

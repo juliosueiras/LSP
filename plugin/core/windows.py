@@ -412,7 +412,8 @@ class WindowManager(object):
 
             self._configs.disable(config.name)
             self._sublime.message_dialog(message)
-            debug(message)
+            # Also print the error message to the console in case we need to investigate it.
+            debug(str(e))
 
         if session:
             debug("window {} added session {}".format(self._window.id(), config.name))

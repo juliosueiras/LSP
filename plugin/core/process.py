@@ -1,8 +1,8 @@
 from .logging import debug, exception_log, server_log
+from .types import ClientConfig
 import os
 import shutil
 import subprocess
-import tempfile
 import threading
 
 try:
@@ -33,27 +33,41 @@ def add_extension_if_missing(server_binary_args: 'List[str]') -> 'List[str]':
     return server_binary_args
 
 
+def get_server_working_directory_and_ensure_existence(config: ClientConfig) -> str:
+    tempdir = ''
+    try:
+        import sublime
+        tempdir = sublime.cache_path()
+    except ImportError:
+        import tempfile
+        tempdir = tempfile.gettempdir()
+    # TODO: from .settings import PLUGIN_NAME? Cannot do that because it imports the sublime module.
+    tempdir = os.path.join(tempdir, 'LSP', config.name)
+    os.makedirs(tempdir, exist_ok=True)
+    return tempdir
+
+
 def start_server(
-    server_binary_args: 'List[str]',
+    config: ClientConfig,
     env: 'Dict[str,str]',
     attach_stderr: bool
 ) -> 'Optional[subprocess.Popen]':
     startupinfo = None
     if os.name == "nt":
-        server_binary_args = add_extension_if_missing(server_binary_args)
+        server_binary_args = add_extension_if_missing(config.binary_args)
         startupinfo = subprocess.STARTUPINFO()  # type: ignore
         startupinfo.dwFlags |= subprocess.SW_HIDE | subprocess.STARTF_USESHOWWINDOW  # type: ignore
-
-    debug("starting " + str(server_binary_args))
-
+    else:
+        server_binary_args = config.binary_args
+    cwd = get_server_working_directory_and_ensure_existence(config)
+    debug("starting", str(server_binary_args), "in", cwd)
     stderr_destination = subprocess.PIPE if attach_stderr else subprocess.DEVNULL
-
     return subprocess.Popen(
         server_binary_args,
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=stderr_destination,
-        cwd=tempfile.gettempdir(),
+        cwd=cwd,
         env=env,
         startupinfo=startupinfo)
 

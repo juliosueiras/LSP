@@ -35,7 +35,7 @@ def create_session(config: ClientConfig,
 
     session = None
     if config.binary_args:
-        process = start_server(config.binary_args, env, settings.log_stderr)
+        process = start_server(config, env, settings.log_stderr)
         if process:
             if config.tcp_port:
                 transport = start_tcp_transport(config.tcp_port, config.tcp_host)

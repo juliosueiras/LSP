@@ -66,6 +66,8 @@ class ClientConfig(object):
                  syntaxes=[], languageId: 'Optional[str]' = None,
                  languages: 'List[LanguageConfig]' = [], enabled: bool = True, init_options=dict(),
                  settings=dict(), env=dict(), tcp_host: 'Optional[str]' = None) -> None:
+        if ' ' in name:
+            raise ValueError('config name contains spaces: "{}"'.format(name))
         self.name = name
         self.binary_args = binary_args
         self.tcp_port = tcp_port

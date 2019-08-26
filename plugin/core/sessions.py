@@ -116,7 +116,8 @@ def get_initialize_params(workspaces: 'Optional[Iterable[Workspace]]', config: C
                         }
                     }
                 },
-                "rename": {}
+                "rename": {},
+                "colorProvider": {}
             },
             "workspace": {
                 "applyEdit": True,

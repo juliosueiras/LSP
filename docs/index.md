@@ -77,6 +77,20 @@ Alternatively, Microsoft's python language server (using .NET Core runtime)
 
 [Instructions here](https://github.com/Microsoft/python-language-server/blob/master/Using_in_sublime_text.md)
 
+Use virtualenv adding the following settings :
+
+```json
+"settings": {
+        "LSP": {
+            "pyls": {
+                "env": {
+                    "PYTHONPATH": "/Users/mike/.virtualenvs/my-virtual-env/lib/python3.7/site-packages"
+                }
+            }
+        }
+    }
+```
+
 ### PHP<a name="php"></a>
 
 #### Intelephense
@@ -155,7 +169,7 @@ Add to LSP settings' clients:
 ### Elm<a name="elm"></a>
 
 See instructions for installing the [elm-language-server](https://github.com/elm-tooling/elm-language-server).
-Install [Elm Language Support](https://packagecontrol.io/packages/Elm%20Language%20Support) from Package Control for syntax highlighting.
+Install [Elm Syntax Higlighting](https://packagecontrol.io/packages/Elm%20Syntax%20Highlighting) from Package Control for syntax highlighting.
 
 Add to LSP settings' clients:
 
@@ -230,11 +244,11 @@ More info: https://github.com/Polymer/polymer-editor-service
 
 ### Dart<a name="dart"></a>
 
-`pub global activate dart_language_server`
+Install the Dart Sublime package and the [Dart SDK](https://dart.dev/get-dart)
 
-Make sure the pub bin directory is part of your path.
+Then locate the "snapshots/bin" directory of the SDK, and specify the path to `analysis_server.dart.snapshot` in the LSP user settings under "clients", "dart", then "command".
 
-See: [natebosch/dart_language_server](https://github.com/natebosch/dart_language_server)
+The older [natebosch/dart_language_server](https://github.com/natebosch/dart_language_server) is now deprecated
 
 ### Kotlin
 

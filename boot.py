@@ -15,6 +15,7 @@ from .plugin.hover import *
 from .plugin.references import *
 from .plugin.signature_help import *
 from .plugin.code_actions import *
+from .plugin.color import *
 from .plugin.symbols import *
 from .plugin.rename import *
 from .plugin.execute_command import *
@@ -26,4 +27,3 @@ def plugin_loaded():
 
 def plugin_unloaded():
     shutdown()
-    remove_all_highlights()

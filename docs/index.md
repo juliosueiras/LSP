@@ -211,12 +211,10 @@ Add to LSP settings' clients:
     ],
     "syntaxes":
     [
-        "Packages/Elm Language Support/Syntaxes/Elm.sublime-syntax"
+        "Packages/Elm Syntax Highlighting/src/elm.sublime-syntax"
     ],
     "initializationOptions": {
-        "elmPath": "elm",
-        "elmFormatPath": "elm-format",
-        "elmTestPath": "elm-test"
+        "elmAnalyseTrigger": "change"
     }
 }
 ```
@@ -302,6 +300,26 @@ Requires [building](https://github.com/fwcd/KotlinLanguageServer/blob/master/BUI
 
 Additionally, install the [Kotlin sublime package](https://github.com/vkostyukov/kotlin-sublime-package) for syntax highlighting.
 
+
+### Julia<a name="julia">
+
+
+Install the LanguageServer package from the Julia repl.
+
+Install the [LSP-julia](https://github.com/randy3k/LSP-julia) sublime package from package control.
+
+Or instead of LSP-julia, add the following client configuration:
+
+```json
+"julials":
+{
+  "command": ["bash", "PATH_TO_JULIA_SERVER/LanguageServer/contrib/languageserver.sh"],
+  "languageId": "julia",
+  "scopes": ["source.julia"],
+  "syntaxes": ["Packages/Julia/Julia.sublime-syntax"],
+  "settings": {"runlinter": true}
+}
+```
 
 ### Lua<a name="lua">
 

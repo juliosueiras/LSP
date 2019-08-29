@@ -8,6 +8,7 @@ from .sessions import Session
 from .url import filename_to_uri
 from .workspace import get_workspaces_from_window, Workspace
 from .rpc import Client
+import threading
 try:
     from typing_extensions import Protocol
     from typing import Optional, List, Callable, Dict, Any, Iterable
@@ -207,6 +208,7 @@ class WindowDocumentHandler(object):
         for config_name, language in config_languages.items():
             languages[config_name] = language.id
         view.settings().set('lsp_language', languages)
+        view.settings().set('lsp_active', True)
 
     def handle_view_opened(self, view: ViewLike):
         file_name = view.file_name()
@@ -295,6 +297,10 @@ class WindowDocumentHandler(object):
     def notify_did_change(self, view: ViewLike):
         file_name = view.file_name()
         if file_name and view.window() == self._window:
+            # ensure view is opened.
+            if not self.has_document_state(file_name):
+                self.handle_view_opened(view)
+
             if view.buffer_id() in self._pending_buffer_changes:
                 del self._pending_buffer_changes[view.buffer_id()]
 
@@ -344,6 +350,7 @@ class WindowManager(object):
                                       DiagnosticsUpdate(self._window, client_name, file_path, diagnostics)))
         self._on_closed = on_closed
         self._is_closing = False
+        self._initialization_lock = threading.Lock()
 
     def get_session(self, config_name: str) -> 'Optional[Session]':
         return self._sessions.get(config_name)
@@ -379,11 +386,13 @@ class WindowManager(object):
 
     def _initialize_on_open(self, view: ViewLike):
         # have all sessions for this document been started?
-        startable_configs = filter(lambda c: c.enabled and c.name not in self._sessions,
-                                   self._configs.syntax_configs(view))
-        for config in startable_configs:
-            debug("window {} requests {} for {}".format(self._window.id(), config.name, view.file_name()))
-            self._start_client(config)
+        with self._initialization_lock:
+            startable_configs = filter(lambda c: c.enabled and c.name not in self._sessions,
+                                       self._configs.syntax_configs(view))
+
+            for config in startable_configs:
+                debug("window {} requests {} for {}".format(self._window.id(), config.name, view.file_name()))
+                self._start_client(config)
 
     def _start_client(self, config: ClientConfig):
         if not self._can_start_config(config.name):

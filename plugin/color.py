@@ -39,9 +39,7 @@ class LspColorListener(sublime_plugin.ViewEventListener):
 
     @classmethod
     def is_applicable(cls, _settings):
-        if settings.show_color_box:
-            return True
-        return False
+        return 'colorProvider' not in settings.disabled_capabilities
 
     def on_activated_async(self):
         self.schedule_request()
@@ -69,8 +67,8 @@ class LspColorListener(sublime_plugin.ViewEventListener):
             alpha = color['alpha']
 
             content = """
-            <div style='padding: 0.5rem;
-                        margin-top: 0.1rem;
+            <div style='padding: 0.4em;
+                        margin-top: 0.1em;
                         border: 1px solid color(var(--foreground) alpha(0.25));
                         background-color: rgba({}, {}, {}, {})'>
             </div>""".format(red, green, blue, alpha)

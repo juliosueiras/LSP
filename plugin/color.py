@@ -9,7 +9,7 @@ except ImportError:
 
 from .core.protocol import Request
 from .core.url import filename_to_uri
-from .core.registry import session_for_view
+from .core.registry import session_for_view, config_for_scope
 from .core.settings import settings
 from .core.views import range_to_region
 from .core.protocol import Range
@@ -17,18 +17,15 @@ from .core.protocol import Range
 
 def send_color_request(view, on_response_recieved: 'Callable'):
     session = session_for_view(view)
-    if not session or not session.has_capability('colorProvider'):
-        # the server doesn't support colors, just return
-        return
-
-    params = {
-        "textDocument": {
-            "uri": filename_to_uri(view.file_name())
+    if session and session.has_capability('colorProvider'):
+        params = {
+            "textDocument": {
+                "uri": filename_to_uri(view.file_name())
+            }
         }
-    }
-    session.client.send_request(
-        Request.documentColor(params),
-        lambda response: on_response_recieved(response))
+        session.client.send_request(
+            Request.documentColor(params),
+            lambda response: on_response_recieved(response))
 
 
 class LspColorListener(sublime_plugin.ViewEventListener):
@@ -36,12 +33,25 @@ class LspColorListener(sublime_plugin.ViewEventListener):
         super().__init__(view)
         self.color_phantom_set = None  # type: Optional[sublime.PhantomSet]
         self._stored_point = -1
+        self._initialized = False
+        self._enabled = False
 
     @classmethod
     def is_applicable(cls, _settings):
         if settings.show_color_box:
             return True
         return False
+
+    def _initialize(self) -> None:
+        config = config_for_scope(self.view)
+        session = session_for_view(self.view)
+        if config and not session:
+            return  # wait for startup ?
+        self._initialized = True
+        if session:
+            self._enabled = session.has_capability('colorProvider')
+        else:
+            self._enabled = False
 
     def on_activated_async(self):
         self.schedule_request()
@@ -50,10 +60,15 @@ class LspColorListener(sublime_plugin.ViewEventListener):
         self.schedule_request()
 
     def schedule_request(self):
-        current_point = self.view.sel()[0].begin()
-        if self._stored_point != current_point:
-            self._stored_point = current_point
-            sublime.set_timeout_async(lambda: self.fire_request(current_point), 800)
+        if not self._initialized:
+            self._initialize()
+        if self._enabled:
+            cursors = self.view.sel()
+            if len(cursors) > 0:
+                current_point = cursors[0].begin()
+                if self._stored_point != current_point:
+                    self._stored_point = current_point
+                    sublime.set_timeout_async(lambda: self.fire_request(current_point), 800)
 
     def fire_request(self, current_point: int) -> None:
         if current_point == self._stored_point:

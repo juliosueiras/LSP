@@ -4,13 +4,9 @@ import sublime_plugin
 import webbrowser
 
 from .core.settings import ClientConfig, client_configs
-from .core.configurations import (
-    create_window_configs,
-    get_global_client_config
-)
+from .core.configurations import get_global_client_config
 from .core.registry import config_for_scope, windows
 from .core.events import global_events
-from .core.workspace import enable_in_project, disable_in_project
 
 try:
     from typing import List, Optional, Dict, Any
@@ -45,16 +41,16 @@ def show_enable_config(view: sublime.View, config: ClientConfig):
         window.status_message(message)
 
 
+def create_config_items(configs: 'List[ClientConfig]'):
+    return [[
+        config.name, ", ".join(language.id
+                               for language in config.languages)
+    ] for config in configs]
+
+
 class LspEnableLanguageServerGloballyCommand(sublime_plugin.WindowCommand):
     def run(self):
-        self._items = []  # type: List[List[str]]
-        for config in client_configs.all:
-            if not config.enabled:
-                self._items.append([
-                    config.name,
-                    ", ".join(language.id for language in config.languages)
-                ])
-
+        self._items = create_config_items([config for config in client_configs.all if not config.enabled])
         if len(self._items) > 0:
             self.window.show_quick_panel(self._items, self._on_done)
         else:
@@ -63,9 +59,9 @@ class LspEnableLanguageServerGloballyCommand(sublime_plugin.WindowCommand):
     def _on_done(self, index):
         if index > -1:
             config_name = self._items[index][0]
-
-            # too much work
             client_configs.enable(config_name)
+
+            # start the server on the current window.
             wm = windows.lookup(self.window)
             sublime.set_timeout_async(lambda: wm.start_active_views(), 500)
             self.window.status_message("{} enabled, starting server...".format(config_name))
@@ -73,16 +69,8 @@ class LspEnableLanguageServerGloballyCommand(sublime_plugin.WindowCommand):
 
 class LspEnableLanguageServerInProjectCommand(sublime_plugin.WindowCommand):
     def run(self):
-        self._items = []  # type: List[List[str]]
         wm = windows.lookup(self.window)
-        for config in wm._configs.all:
-            # should also check if enabled here.
-            if not config.enabled:
-                self._items.append([
-                    config.name,
-                    ", ".join(language.id for language in config.languages)
-                ])
-
+        self._items = create_config_items([config for config in wm._configs.all if not config.enabled])
         if len(self._items) > 0:
             self.window.show_quick_panel(self._items, self._on_done)
         else:
@@ -92,22 +80,12 @@ class LspEnableLanguageServerInProjectCommand(sublime_plugin.WindowCommand):
         if index > -1:
             config_name = self._items[index][0]
             wm = windows.lookup(self.window)
-            enable_in_project(self.window, config_name)
-            wm.update_configs(create_window_configs(self.window, client_configs.all))
-            sublime.set_timeout_async(lambda: wm.start_active_views(), 500)
-            self.window.status_message("{} enabled, starting server...".format(config_name))
+            wm.enable_config(config_name)
 
 
 class LspDisableLanguageServerGloballyCommand(sublime_plugin.WindowCommand):
     def run(self):
-        self._items = []  # type: List[List[str]]
-        for config in client_configs.all:
-            if config.enabled:
-                self._items.append([
-                    config.name,
-                    ", ".join(language.id for language in config.languages)
-                ])
-
+        self._items = create_config_items([config for config in client_configs.all if config.enabled])
         if len(self._items) > 0:
             self.window.show_quick_panel(self._items, self._on_done)
         else:
@@ -125,14 +103,7 @@ class LspDisableLanguageServerGloballyCommand(sublime_plugin.WindowCommand):
 class LspDisableLanguageServerInProjectCommand(sublime_plugin.WindowCommand):
     def run(self):
         wm = windows.lookup(self.window)
-        self._items = []  # type: List[List[str]]
-        for config in wm._configs.all:
-            if config.enabled:
-                self._items.append([
-                    config.name,
-                    ", ".join(language.id for language in config.languages)
-                ])
-
+        self._items = create_config_items([config for config in wm._configs.all if config.enabled])
         if len(self._items) > 0:
             self.window.show_quick_panel(self._items, self._on_done)
         else:
@@ -142,9 +113,7 @@ class LspDisableLanguageServerInProjectCommand(sublime_plugin.WindowCommand):
         if index > -1:
             config_name = self._items[index][0]
             wm = windows.lookup(self.window)
-            disable_in_project(self.window, config_name)
-            wm.update_configs(create_window_configs(self.window, client_configs.all))
-            wm.end_session(config_name)
+            wm.disable_config(config_name)
 
 
 supported_syntax_template = '''

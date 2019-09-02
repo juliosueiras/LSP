@@ -47,13 +47,13 @@ class WindowConfigManagerTests(unittest.TestCase):
 
     def test_no_configs(self):
         view = MockView(__file__)
-        manager = WindowConfigManager([])
+        manager = WindowConfigManager(MockWindow(), [])
         self.assertFalse(manager.is_supported(view))
         self.assertFalse(manager.syntax_supported(view))
 
     def test_with_single_config(self):
         view = MockView(__file__)
-        manager = WindowConfigManager([test_config])
+        manager = WindowConfigManager(MockWindow(), [test_config])
         self.assertTrue(manager.is_supported(view))
         self.assertEqual(manager.scope_config(view), test_config)
         self.assertTrue(manager.syntax_supported(view))

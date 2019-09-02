@@ -6,7 +6,7 @@ from .protocol import Notification, Response
 from .edit import parse_workspace_edit
 from .sessions import Session
 from .url import filename_to_uri
-from .workspace import get_project_path
+from .workspace import get_project_path, enable_in_project, disable_in_project
 from .rpc import Client
 import threading
 try:
@@ -39,10 +39,16 @@ class ConfigRegistry(Protocol):
     def syntax_config_languages(self, view: ViewLike) -> 'Dict[str, LanguageConfig]':
         ...
 
-    def update(self, configs: 'List[ClientConfig]') -> None:
+    def update(self) -> None:
         ...
 
-    def disable(self, config_name: str) -> None:
+    def enable_config(self, config_name: str) -> None:
+        ...
+
+    def disable_config(self, config_name: str) -> None:
+        ...
+
+    def disable_temporarily(self, config_name: str) -> None:
         ...
 
 
@@ -347,8 +353,19 @@ class WindowManager(object):
     def _can_start_config(self, config_name: str):
         return config_name not in self._sessions
 
-    def update_configs(self, configs: 'List[ClientConfig]') -> None:
-        self._configs.update(configs)
+    def update_configs(self) -> None:
+        self._configs.update()
+
+    def enable_config(self, config_name: str) -> None:
+        enable_in_project(self._window, config_name)
+        self.update_configs()
+        self._sublime.set_timeout_async(self.start_active_views, 500)
+        self._window.status_message("{} enabled, starting server...".format(config_name))
+
+    def disable_config(self, config_name: str) -> None:
+        disable_in_project(self._window, config_name)
+        self.update_configs()
+        self.end_session(config_name)
 
     def start_active_views(self):
         active_views = get_active_views(self._window)
@@ -405,7 +422,7 @@ class WindowManager(object):
                 "Server will be disabled for this window"
             ]).format(config.name, str(e))
 
-            self._configs.disable(config.name)
+            self._configs.disable_temporarily(config.name)
             self._sublime.message_dialog(message)
 
         if session:
